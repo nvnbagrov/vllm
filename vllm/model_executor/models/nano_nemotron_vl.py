@@ -902,15 +902,6 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
     HF Processor with extended video processing logic.
     Code for video processing is adapted from video example:
     https://huggingface.co/OpenGVLab/InternVL3-1B#inference-with-transformers
-    
-    Video Preprocessing:
-        Pass fast_preprocess during initialization to toggle batched video preprocessing.
-        - fast_preprocess=True: Use batched torch operations (faster)
-        - fast_preprocess=False: Use per-frame PIL operations (standard)
-    
-    Example:
-        processor = NanoNemotronVLProcessor(..., fast_preprocess=True)
-        batch = processor(text, videos=videos)
     """
 
     def __init__(
@@ -1006,7 +997,7 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
                 metadata["frames_indices"] for metadata in video_metadata_lst
             ]
             video_num_patches = torch.tensor(
-                    [len(item) for item in pixel_values_lst_video]
+                [len(item) for item in pixel_values_lst_video]
             )
             video_inputs = {
                 "pixel_values_flat_video": input_conditioner(
