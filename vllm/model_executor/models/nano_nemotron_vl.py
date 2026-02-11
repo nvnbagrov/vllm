@@ -295,19 +295,16 @@ def video_to_pixel_values(
             antialias=True
         )
 
-                # Normalize to [0, 1] if needed (assuming input is uint8 0-255)
-        if video_tensor.max() > 1.0:
-            video_tensor = video_tensor / 255.0
-
-        resized_frames = video_tensor
+        # Normalize to [0, 1] if needed (assuming input is uint8 0-255)
+        video_tensor = video_tensor / 255.0
         
         elapsed = time.time() - start_time
         print(f"[TIMER] video_to_pixel_values (BATCHED) processed {len(video)} frames in {elapsed:.4f}s ({elapsed/len(video)*1000:.2f}ms/frame)")
-        print(f"[DEBUG] video_to_pixel_values (BATCHED): output_shape={resized_frames.shape}, dtype={resized_frames.dtype}")
-        print(f"[DEBUG] video_to_pixel_values (BATCHED): min={resized_frames.min().item():.4f}, max={resized_frames.max().item():.4f}, mean={resized_frames.mean().item():.4f}")
-        print(f"[DEBUG] video_to_pixel_values (BATCHED): first 5 values={resized_frames.flatten()[:5].tolist()}")
+        print(f"[DEBUG] video_to_pixel_values (BATCHED): output_shape={video_tensor.shape}, dtype={video_tensor.dtype}")
+        print(f"[DEBUG] video_to_pixel_values (BATCHED): min={video_tensor.min().item():.4f}, max={video_tensor.max().item():.4f}, mean={video_tensor.mean().item():.4f}")
+        print(f"[DEBUG] video_to_pixel_values (BATCHED): first 5 values={video_tensor.flatten()[:5].tolist()}")
         
-        return resized_frames
+        return video_tensor
     else:
         # Original per-frame version for compatibility
         frames_tensors: list[torch.Tensor] = []
