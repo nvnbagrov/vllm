@@ -262,7 +262,8 @@ def video_to_pixel_values(
     """Convert video frames to pixel values tensor.
     
     This function supports two modes:
-    1. Original per-frame preprocessing (default): Calls dynamic_preprocess for each frame
+    1. Original per-frame preprocessing (default): Calls dynamic_preprocess
+       for each frame
     2. Optimized batched preprocessing: Uses torch batched resize operations
     
     The batched mode is significantly faster for videos with many frames,
@@ -276,7 +277,8 @@ def video_to_pixel_values(
         # Optimized batched version using torch operations
         # video shape: (num_frames, height, width, 3)
         
-        # Convert numpy array to torch tensor: (num_frames, H, W, C) -> (num_frames, C, H, W)
+        # Convert numpy array to torch tensor:
+        # (num_frames, H, W, C) -> (num_frames, C, H, W)
         video_tensor = torch.from_numpy(video)  # (F, H, W, 3)
         video_tensor = video_tensor.permute(0, 3, 1, 2)  # (F, 3, H, W)
 
@@ -295,10 +297,9 @@ def video_to_pixel_values(
         video_tensor = video_tensor / 255.0
         
         elapsed = time.time() - start_time
-        print(f"[TIMER] video_to_pixel_values (BATCHED) processed {len(video)} frames in {elapsed:.4f}s ({elapsed/len(video)*1000:.2f}ms/frame)")
-        print(f"[DEBUG] video_to_pixel_values (BATCHED): output_shape={video_tensor.shape}, dtype={video_tensor.dtype}")
-        print(f"[DEBUG] video_to_pixel_values (BATCHED): min={video_tensor.min().item():.4f}, max={video_tensor.max().item():.4f}, mean={video_tensor.mean().item():.4f}")
-        print(f"[DEBUG] video_to_pixel_values (BATCHED): first 5 values={video_tensor.flatten()[:5].tolist()}")
+        print(f"[TIMER] video_to_pixel_values (BATCHED) processed "
+              f"{len(video)} frames in {elapsed:.4f}s "
+              f"({elapsed/len(video)*1000:.2f}ms/frame)")
         
         return video_tensor
     else:
@@ -319,10 +320,9 @@ def video_to_pixel_values(
         result = torch.stack(frames_tensors)
         
         elapsed = time.time() - start_time
-        print(f"[TIMER] video_to_pixel_values (PER-FRAME) processed {len(video)} frames in {elapsed:.4f}s ({elapsed/len(video)*1000:.2f}ms/frame)")
-        print(f"[DEBUG] video_to_pixel_values (PER-FRAME): output_shape={result.shape}, dtype={result.dtype}")
-        print(f"[DEBUG] video_to_pixel_values (PER-FRAME): min={result.min().item():.4f}, max={result.max().item():.4f}, mean={result.mean().item():.4f}")
-        print(f"[DEBUG] video_to_pixel_values (PER-FRAME): first 5 values={result.flatten()[:5].tolist()}")
+        print(f"[TIMER] video_to_pixel_values (PER-FRAME) processed "
+              f"{len(video)} frames in {elapsed:.4f}s "
+              f"({elapsed/len(video)*1000:.2f}ms/frame)")
         
         return result
 
@@ -788,11 +788,11 @@ class BaseNanoNemotronVLProcessor(ABC):
         images: list[Image.Image],
         max_num_tiles: int,
     ) -> tuple[list[str], dict[str, Any]]:
-        start_time = time.time()
-        
         if len(images) == 0:
             image_inputs = {}
             return text, image_inputs
+
+        start_time = time.time()
 
         if tiler := self.dynamic_tiler:
             tiler.fast_preprocess = self.fast_preprocess
@@ -848,34 +848,6 @@ class BaseNanoNemotronVLProcessor(ABC):
         
         elapsed_time = time.time() - start_time
         print(f"[TIMER] _preprocess_image took {elapsed_time:.4f} seconds")
-        
-        # Print debugging information about the preprocessed tensors
-        print(f"[DEBUG] Image preprocessing complete for {len(images)} image(s)")
-        if tiler := self.dynamic_tiler:
-            print(f"[DEBUG] Using dynamic resolution tiler")
-            print(f"[DEBUG] pixel_values_flat: list of {len(image_inputs['pixel_values_flat'])} tensors")
-            for idx, pv in enumerate(image_inputs['pixel_values_flat']):
-                print(f"[DEBUG]   Image {idx}: shape={pv.shape}, dtype={pv.dtype}")
-                print(f"[DEBUG]   Image {idx}: first 5 values={pv.flatten()[:5].tolist()}")
-                print(f"[DEBUG]   Image {idx}: min={pv.min().item():.4f}, max={pv.max().item():.4f}, mean={pv.mean().item():.4f}")
-                if idx < len(images):
-                    orig_img = images[idx]
-                    print(f"[DEBUG]   Image {idx}: original_size={orig_img.size}, mode={orig_img.mode}")
-            print(f"[DEBUG] imgs_sizes: {image_inputs['imgs_sizes']}")
-            print(f"[DEBUG] num_tokens_per_image: {image_inputs['num_tokens_per_image']}")
-        else:
-            print(f"[DEBUG] Using standard (non-dynamic) resolution")
-            print(f"[DEBUG] pixel_values_flat: shape={image_inputs['pixel_values_flat'].shape}, dtype={image_inputs['pixel_values_flat'].dtype}")
-            print(f"[DEBUG] pixel_values_flat: first 5 values={image_inputs['pixel_values_flat'].flatten()[:5].tolist()}")
-            print(f"[DEBUG] pixel_values_flat: min={image_inputs['pixel_values_flat'].min().item():.4f}, max={image_inputs['pixel_values_flat'].max().item():.4f}, mean={image_inputs['pixel_values_flat'].mean().item():.4f}")
-            print(f"[DEBUG] image_num_patches: {image_inputs['image_num_patches'].tolist()}")
-            # Per-image details
-            image_num_patches_list = image_inputs['image_num_patches'].tolist()
-            for idx, num_patches in enumerate(image_num_patches_list):
-                print(f"[DEBUG]   Image {idx}: num_patches={num_patches}")
-                if idx < len(images):
-                    orig_img = images[idx]
-                    print(f"[DEBUG]   Image {idx}: original_size={orig_img.size}, mode={orig_img.mode}")
         
         return text, image_inputs
 
@@ -1062,35 +1034,6 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
         
         elapsed_time = time.time() - start_time
         print(f"[TIMER] _preprocess_video took {elapsed_time:.4f} seconds")
-        
-        # Print debugging information about the preprocessed video tensors
-        if len(videos) > 0 and self.supports_video:
-            print(f"[DEBUG] Video preprocessing complete for {len(videos)} video(s)")
-            print(f"[DEBUG] pixel_values_flat_video: shape={video_inputs['pixel_values_flat_video'].shape}, dtype={video_inputs['pixel_values_flat_video'].dtype}")
-            print(f"[DEBUG] pixel_values_flat_video: first 5 values={video_inputs['pixel_values_flat_video'].flatten()[:5].tolist()}")
-            print(f"[DEBUG] pixel_values_flat_video: min={video_inputs['pixel_values_flat_video'].min().item():.4f}, max={video_inputs['pixel_values_flat_video'].max().item():.4f}, mean={video_inputs['pixel_values_flat_video'].mean().item():.4f}")
-            
-            # Per-video details
-            video_num_patches_list = video_inputs['video_num_patches'].tolist()
-            frame_duration_ms_list = video_inputs['frame_duration_ms'].tolist()
-            for idx, (num_patches, frame_dur_ms, frames_idx) in enumerate(zip(
-                video_num_patches_list, 
-                frame_duration_ms_list, 
-                video_inputs['frames_indices']
-            )):
-                print(f"[DEBUG]   Video {idx}: num_frames={num_patches}, frame_duration_ms={frame_dur_ms}")
-                if hasattr(frames_idx, 'tolist'):
-                    frames_list = frames_idx.tolist() if len(frames_idx) <= 10 else frames_idx[:10].tolist()
-                else:
-                    frames_list = frames_idx[:10] if len(frames_idx) > 10 else frames_idx
-                print(f"[DEBUG]   Video {idx}: frame_indices={frames_list}{'...' if len(frames_idx) > 10 else ''}")
-                
-                # Get metadata for this video if available
-                if idx < len(videos):
-                    video_array, metadata = videos[idx]
-                    print(f"[DEBUG]   Video {idx}: original_shape={video_array.shape}, fps={metadata.get('fps', 'N/A')}")
-        else:
-            print(f"[DEBUG] No videos to preprocess or video not supported")
         
         return text, video_inputs
 
