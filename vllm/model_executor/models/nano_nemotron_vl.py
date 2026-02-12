@@ -24,6 +24,7 @@ import numpy.typing as npt
 import regex as re
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.transforms as T
 from PIL import Image
 from transformers import BatchFeature, PretrainedConfig, TensorType
@@ -186,8 +187,9 @@ NanoNemotronVLVideoInputs: TypeAlias = (
 )
 
 
-def dynamic_preprocess(  # TODO(nbagrov): when using tiles?
-    image, *, image_size=512, max_num_tiles=12, use_thumbnail=True, idx=0
+def dynamic_preprocess(
+    image, *, image_size=512, max_num_tiles=12, use_thumbnail=True, idx=0,
+    fast_preprocess=False
 ):
     orig_width, orig_height = image.size
 
@@ -200,35 +202,74 @@ def dynamic_preprocess(  # TODO(nbagrov): when using tiles?
         image_size=image_size,
         use_thumbnail=False,
     )
-    # resize the image
-    resized_img = image.resize((target_width, target_height))
-    processed_images = []
-    for i in range(blocks):
-        box = (
-            (i % (target_width // image_size)) * image_size,
-            (i // (target_width // image_size)) * image_size,
-            ((i % (target_width // image_size)) + 1) * image_size,
-            ((i // (target_width // image_size)) + 1) * image_size,
-        )
-        # split the image
-        split_img = resized_img.crop(box)
-        processed_images.append(split_img)
-    assert len(processed_images) == blocks
-    if use_thumbnail and len(processed_images) != 1:
-        thumbnail_img = image.resize((image_size, image_size))
-        processed_images.append(thumbnail_img)
 
-    processed_images = [
-        img.convert("RGB") if img.mode != "RGB" else img for img in processed_images
-    ]
-    processed_images = [
-        T.Resize((image_size, image_size), interpolation=T.InterpolationMode.BICUBIC)(
-            img
+    if fast_preprocess:
+        rgb_array = np.asarray(
+            image.convert("RGB") if image.mode != "RGB"
+            else image, dtype=np.uint8
         )
-        for img in processed_images
-    ]
-    processed_images = [T.ToTensor()(img) for img in processed_images]
-    return processed_images
+        resized_img = cv2.resize(
+            rgb_array,
+            dsize=(target_width, target_height),
+            interpolation=cv2.INTER_LINEAR,
+        )
+
+        resized_img = T.ToTensor()(resized_img)  # (3, H, W)
+        resized_img = resized_img.unsqueeze(0)
+
+        # Extract patches
+        patches = F.unfold(
+            resized_img,
+            kernel_size=image_size,
+            stride=image_size
+        )  # shape: (1, 3 * image_size * image_size, num_patches)
+
+        # Reshape to (num_patches, 3, image_size, image_size)
+        patches = patches.transpose(1, 2)
+        patches = patches.reshape(-1, 3, image_size, image_size)
+
+        # Optional thumbnail
+        if use_thumbnail and patches.shape[0] > 1:
+            thumb = cv2.resize(
+                rgb_array,
+                dsize=(image_size, image_size),
+                interpolation=cv2.INTER_LINEAR,
+            )
+            thumb = T.ToTensor()(thumb)
+            patches = torch.cat([patches, thumb.unsqueeze(0)], dim=0)
+
+        return list(patches)  # since output expected as list of tensors
+    else:
+        # resize the image
+        resized_img = image.resize((target_width, target_height))
+        processed_images = []
+        for i in range(blocks):
+            box = (
+                (i % (target_width // image_size)) * image_size,
+                (i // (target_width // image_size)) * image_size,
+                ((i % (target_width // image_size)) + 1) * image_size,
+                ((i // (target_width // image_size)) + 1) * image_size,
+            )
+            # split the image
+            split_img = resized_img.crop(box)
+            processed_images.append(split_img)
+        assert len(processed_images) == blocks
+        if use_thumbnail and len(processed_images) != 1:
+            thumbnail_img = image.resize((image_size, image_size))
+            processed_images.append(thumbnail_img)
+
+        processed_images = [
+            img.convert("RGB") if img.mode != "RGB" else img for img in processed_images
+        ]
+        processed_images = [
+            T.Resize((image_size, image_size),
+            interpolation=T.InterpolationMode.BICUBIC)(
+                img
+            )
+            for img in processed_images
+        ]
+        processed_images = [T.ToTensor()(img) for img in processed_images]
+        return processed_images
 
 
 def image_to_pixel_values(
@@ -238,6 +279,7 @@ def image_to_pixel_values(
     max_num: int,
     use_thumbnail: bool,
     idx: int,
+    fast_preprocess: bool = False,
 ) -> torch.Tensor:
     images = dynamic_preprocess(
         image,
@@ -245,6 +287,7 @@ def image_to_pixel_values(
         max_num_tiles=max_num,
         use_thumbnail=use_thumbnail,
         idx=idx,
+        fast_preprocess=fast_preprocess,
     )
 
     pixel_values = torch.stack(images)
@@ -312,6 +355,7 @@ def video_to_pixel_values(
                 max_num_tiles=max_num_tiles,
                 use_thumbnail=use_thumbnail,
                 idx=0,
+                fast_preprocess=fast_preprocess,
             )
             # dynamic_preprocess returns tensors already; take the single tile
             assert len(pil_frame) >= 1
@@ -698,13 +742,14 @@ class BaseNanoNemotronVLProcessor(ABC):
         *args,
         max_model_len: int,
         max_num_tiles: int | None = None,
+        fast_preprocess: bool = False,
         **kwargs,
     ) -> None:
         super().__init__()
 
         self.config = config
         self.tokenizer = tokenizer
-
+        self.fast_preprocess = fast_preprocess
         self.max_num_tiles = max_num_tiles or DEFAULT_NUM_TILES
         image_size: int = config.force_image_size
         patch_size: int = config.patch_size
@@ -778,6 +823,7 @@ class BaseNanoNemotronVLProcessor(ABC):
                 max_num=max_num_tiles,
                 use_thumbnail=self.use_thumbnail,
                 idx=idx,
+                fast_preprocess=self.fast_preprocess,
             )
             for idx, image in enumerate(images)
         ]
@@ -892,11 +938,11 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
             tokenizer=tokenizer,
             max_model_len=max_model_len,
             max_num_tiles=max_num_tiles,
+            fast_preprocess=fast_preprocess,
         )
         # add extra video token for video processing
         self.video_token = video_token
         self.video_pruning_rate = video_pruning_rate
-        self.fast_preprocess = fast_preprocess
 
         # Pre-tokenize special tokens for video processing
         # to avoid repeated tokenization
