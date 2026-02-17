@@ -9,6 +9,7 @@
 
 import copy
 import math
+import os
 import time
 import warnings
 from abc import ABC, abstractmethod
@@ -101,6 +102,7 @@ IMG_CONTEXT = "<image>"
 # Profiling
 # MAX_FRAMES = 16
 DEFAULT_NUM_TILES = 12
+VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS = int(os.getenv("VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS", 0)) == 1
 
 
 
@@ -189,7 +191,7 @@ NanoNemotronVLVideoInputs: TypeAlias = (
 
 def dynamic_preprocess(
     image, *, image_size=512, max_num_tiles=12, use_thumbnail=True, idx=0,
-    fast_preprocess=False
+    fast_preprocess=VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS
 ):
     orig_width, orig_height = image.size
 
@@ -279,7 +281,7 @@ def image_to_pixel_values(
     max_num: int,
     use_thumbnail: bool,
     idx: int,
-    fast_preprocess: bool = False,
+    fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
 ) -> torch.Tensor:
     images = dynamic_preprocess(
         image,
@@ -300,7 +302,7 @@ def video_to_pixel_values(
     input_size: int,
     max_num_tiles: int = 1,
     use_thumbnail: bool,
-    fast_preprocess: bool = False,
+    fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
 ) -> torch.Tensor:
     """Convert video frames to pixel values tensor.
     
@@ -316,6 +318,10 @@ def video_to_pixel_values(
     
     start_time = time.time()
     
+    # perf tweak in case we don't need to resize the video;
+    # 'non-fast' mode was benchmarked actually faster in some cases
+    fast_preprocess &= (video.shape[2] != input_size or video.shape[1] != input_size)
+
     if fast_preprocess:
         # Optimized batched version using torch operations
         # video shape: (num_frames, height, width, 3)
@@ -403,7 +409,7 @@ class DynamicResolutionImageTiler:
         norm_std: Sequence[float],
         factor_max: float = 1.0,
         use_thumbnail: bool = False,
-        fast_preprocess: bool = False,
+        fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
     ) -> None:
         assert use_thumbnail is False, "use_thumbnail is not supported"
         self._patch_size: int = patch_size
@@ -742,7 +748,7 @@ class BaseNanoNemotronVLProcessor(ABC):
         *args,
         max_model_len: int,
         max_num_tiles: int | None = None,
-        fast_preprocess: bool = False,
+        fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -893,7 +899,7 @@ class BaseNanoNemotronVLProcessor(ABC):
         text = ["".join(parts)]
         
         elapsed_time = time.time() - start_time
-        print(f"[TIMER] _preprocess_image took {elapsed_time:.4f} seconds")
+        print(f"[TIMER] _preprocess_image ({self.fast_preprocess=}) took {elapsed_time:.4f} seconds")
         
         return text, image_inputs
 
@@ -931,7 +937,7 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
         max_num_tiles: int | None = None,
         video_token: str | None = None,
         video_pruning_rate: float | None = None,
-        fast_preprocess: bool = False,
+        fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
     ) -> None:
         super().__init__(
             config=config,
@@ -1079,7 +1085,7 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
                 text = [t.replace("<video>", video_repl_text, 1) for t in text]
         
         elapsed_time = time.time() - start_time
-        print(f"[TIMER] _preprocess_video took {elapsed_time:.4f} seconds")
+        print(f"[TIMER] _preprocess_video ({self.fast_preprocess=}) took {elapsed_time:.4f} seconds")
         
         return text, video_inputs
 
