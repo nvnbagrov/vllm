@@ -102,7 +102,7 @@ IMG_CONTEXT = "<image>"
 # Profiling
 # MAX_FRAMES = 16
 DEFAULT_NUM_TILES = 12
-VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS = int(os.getenv("VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS", 0)) == 1
+FAST_PREPROCESS = int(os.getenv("VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS", 0)) == 1
 
 
 
@@ -191,7 +191,7 @@ NanoNemotronVLVideoInputs: TypeAlias = (
 
 def dynamic_preprocess(
     image, *, image_size=512, max_num_tiles=12, use_thumbnail=True, idx=0,
-    fast_preprocess=VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS
+    fast_preprocess=FAST_PREPROCESS
 ):
     orig_width, orig_height = image.size
 
@@ -281,7 +281,7 @@ def image_to_pixel_values(
     max_num: int,
     use_thumbnail: bool,
     idx: int,
-    fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
+    fast_preprocess: bool = FAST_PREPROCESS,
 ) -> torch.Tensor:
     images = dynamic_preprocess(
         image,
@@ -302,7 +302,7 @@ def video_to_pixel_values(
     input_size: int,
     max_num_tiles: int = 1,
     use_thumbnail: bool,
-    fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
+    fast_preprocess: bool = FAST_PREPROCESS,
 ) -> torch.Tensor:
     """Convert video frames to pixel values tensor.
     
@@ -409,7 +409,7 @@ class DynamicResolutionImageTiler:
         norm_std: Sequence[float],
         factor_max: float = 1.0,
         use_thumbnail: bool = False,
-        fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
+        fast_preprocess: bool = FAST_PREPROCESS,
     ) -> None:
         assert use_thumbnail is False, "use_thumbnail is not supported"
         self._patch_size: int = patch_size
@@ -748,7 +748,7 @@ class BaseNanoNemotronVLProcessor(ABC):
         *args,
         max_model_len: int,
         max_num_tiles: int | None = None,
-        fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
+        fast_preprocess: bool = FAST_PREPROCESS,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -937,7 +937,7 @@ class NanoNemotronVLProcessor(BaseNanoNemotronVLProcessor):
         max_num_tiles: int | None = None,
         video_token: str | None = None,
         video_pruning_rate: float | None = None,
-        fast_preprocess: bool = VLLM_NANO_NEMOTRON_VL_FAST_PREPROCESS,
+        fast_preprocess: bool = FAST_PREPROCESS,
     ) -> None:
         super().__init__(
             config=config,
