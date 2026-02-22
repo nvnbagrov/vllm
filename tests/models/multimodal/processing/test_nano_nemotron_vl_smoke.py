@@ -410,7 +410,7 @@ def test_compare_image_preprocessing_modes(model_type, model_path):
         print(f"{result['resolution']:<15} "
               f"{result['time_standard']:<15.4f} "
               f"{result['time_fast']:<15.4f} "
-              f"{result['speedup']:<12.2f}x "
+              f"x{result['speedup']:<12.2f} "
               f"{max_diff_str:<12}")
     
     avg_speedup = sum(r['speedup'] for r in results) / len(results)
@@ -599,7 +599,7 @@ def test_compare_video_preprocessing_modes(model_type, model_path):
             print("-" * 80)
             for result in results_for_resolution:
                 print(f"{result['num_frames']:<10} {result['time_standard']:<15.4f} {result['time_fast']:<15.4f} "
-                      f"{result['speedup']:<12.2f}x {result['time_per_frame_standard']:<12.2f} "
+                      f"x{result['speedup']:<12.2f} {result['time_per_frame_standard']:<12.2f} "
                       f"{result['time_per_frame_fast']:<12.2f}")
             
             avg_speedup_res = sum(r['speedup'] for r in results_for_resolution) / len(results_for_resolution)
@@ -619,7 +619,7 @@ def test_compare_video_preprocessing_modes(model_type, model_path):
         for result in all_results:
             max_diff_str = f"{result['max_diff']:.6f}" if result['max_diff'] is not None else "N/A"
             print(f"{result['resolution']:<15} {result['num_frames']:<10} {result['time_standard']:<15.4f} {result['time_fast']:<15.4f} "
-                  f"{result['speedup']:<12.2f}x {result['time_per_frame_standard']:<12.2f} "
+                  f"x{result['speedup']:<12.2f} {result['time_per_frame_standard']:<12.2f} "
                   f"{result['time_per_frame_fast']:<12.2f} {max_diff_str:<12}")
         
         # Calculate overall statistics

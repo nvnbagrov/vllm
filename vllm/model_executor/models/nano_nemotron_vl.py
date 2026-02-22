@@ -206,18 +206,37 @@ def dynamic_preprocess(
     )
 
     if fast_preprocess:
-        rgb_array = np.asarray(
+        image = np.asarray(
             image.convert("RGB") if image.mode != "RGB"
             else image, dtype=np.uint8
         )
-        resized_img = cv2.resize(
-            rgb_array,
-            dsize=(target_width, target_height),
-            interpolation=cv2.INTER_LINEAR,
+        # resized_img = cv2.resize(
+        #     rgb_array,
+        #     dsize=(target_width, target_height),
+        #     interpolation=cv2.INTER_AREA,
+        # )
+
+        # resized_img = image.resize((target_width, target_height), resample=Image.BICUBIC)
+
+        image = torch.from_numpy(image).unsqueeze(0)  # (1, H, W, 3)
+        image = image.permute(0, 3, 1, 2)  # (1, 3, H, W)
+
+        
+        # Resize using torch.nn.functional.interpolate
+        # This is much faster than per-frame PIL resize
+        resized_img = torch.nn.functional.interpolate(
+            image,
+            size=(target_height, target_width),
+            mode='bicubic',
+            align_corners=False,
+            antialias=True
         )
 
-        resized_img = T.ToTensor()(resized_img)  # (3, H, W)
-        resized_img = resized_img.unsqueeze(0)
+        # Normalize to [0, 1] if needed (assuming input is uint8 0-255)
+        resized_img = resized_img / 255.0
+
+        # resized_img = T.ToTensor()(resized_img)  # (3, H, W)
+        # resized_img = resized_img.unsqueeze(0)
 
         # Extract patches
         patches = F.unfold(
@@ -232,13 +251,14 @@ def dynamic_preprocess(
 
         # Optional thumbnail
         if use_thumbnail and patches.shape[0] > 1:
-            thumb = cv2.resize(
-                rgb_array,
-                dsize=(image_size, image_size),
-                interpolation=cv2.INTER_LINEAR,
-            )
-            thumb = T.ToTensor()(thumb)
-            patches = torch.cat([patches, thumb.unsqueeze(0)], dim=0)
+            thumb = torch.nn.functional.interpolate(
+                image,
+                size=(image_size, image_size),
+                mode='bicubic',
+                align_corners=False,
+                antialias=True
+            ) / 255.0
+            patches = torch.cat([patches, thumb], dim=0)
 
         return list(patches)  # since output expected as list of tensors
     else:
@@ -514,23 +534,24 @@ class DynamicResolutionImageTiler:
             params.patch_size[1] * self._patch_size
         )
         if self.fast_preprocess:
-            rgb_array = np.asarray(
+            image = np.asarray(
                 params.media.convert("RGB") if params.media.mode != "RGB"
                 else params.media, dtype=np.uint8
             )
-            resized_img = cv2.resize(
-                rgb_array,
-                dsize=target_size,
-                interpolation=cv2.INTER_LINEAR,
-            )
+            resized_img = torch.nn.functional.interpolate(
+                torch.from_numpy(image).unsqueeze(0).permute(0, 3, 1, 2),
+                size=(target_size[1], target_size[0]),
+                mode='bicubic',
+                align_corners=False,
+                antialias=True
+            ) / 255.0
+            return list(resized_img)
         else:
             resized_img = params.media.resize(
                 target_size
             )
-        
-        processed_images = [resized_img]
+            return [self._build_transform()(resized_img)]
 
-        return [self._build_transform()(img) for img in processed_images]
 
     def _build_transform(self) -> T.Compose:
         transforms = [T.ToTensor()]
